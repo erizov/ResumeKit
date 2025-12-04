@@ -246,3 +246,42 @@ class UserResponse(BaseModel):
     created_at: datetime
 
 
+class StylePresetCreate(BaseModel):
+    """
+    Schema for creating a style preset.
+    """
+
+    name: str
+    language: str
+    industry: str
+    description: Optional[str] = None
+    section_order: Optional[str] = None
+    formatting_rules: Optional[str] = None
+    style_guidelines: Optional[str] = None
+    ats_keywords: Optional[str] = None
+    tone_guidance: Optional[str] = None
+    length_guidelines: Optional[str] = None
+    is_active: bool = True
+
+
+class StylePresetResponse(BaseModel):
+    """
+    Schema for style preset response.
+    """
+
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    name: str
+    language: str
+    industry: str
+    description: Optional[str] = None
+    section_order: Optional[str] = None
+    formatting_rules: Optional[str] = None
+    style_guidelines: Optional[str] = None
+    ats_keywords: Optional[str] = None
+    tone_guidance: Optional[str] = None
+    length_guidelines: Optional[str] = None
+    is_active: bool
+
+
