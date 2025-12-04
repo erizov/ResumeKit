@@ -132,7 +132,15 @@ def generate_tailored_resume_llm(
     )
 
     content = completion.choices[0].message.content or ""
-    return content.strip()
+    cleaned_content = content.strip()
+    
+    # Post-process to clean formatting
+    from .resume_formatter import clean_resume_text, format_dates_on_right
+    
+    cleaned_content = clean_resume_text(cleaned_content)
+    cleaned_content = format_dates_on_right(cleaned_content)
+    
+    return cleaned_content
 
 
 def generate_cover_letter_llm(
