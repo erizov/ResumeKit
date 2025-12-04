@@ -13,6 +13,8 @@ To run with real OpenAI API:
 
 import os
 import re
+import shutil
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -23,6 +25,9 @@ from app.main import app
 
 # Enable OpenAI for these tests
 os.environ["RESUMEKIT_USE_OPENAI"] = "1"
+
+# Maximum number of output folders to keep
+MAX_OUTPUT_FOLDERS = 9
 
 
 @pytest.fixture(autouse=True, scope="module")
@@ -42,13 +47,69 @@ def client():
     return TestClient(app)
 
 
+def cleanup_old_output_folders(base_output_dir: Path) -> None:
+    """
+    Remove old output folders, keeping only the MAX_OUTPUT_FOLDERS most recent.
+    
+    Args:
+        base_output_dir: Base output directory containing timestamped folders
+    """
+    if not base_output_dir.exists():
+        return
+    
+    # Find all timestamped folders (format: yyyymmdd.hh.mm.ss)
+    timestamp_folders = []
+    pattern = re.compile(r"^\d{8}\.\d{2}\.\d{2}\.\d{2}$")
+    
+    for item in base_output_dir.iterdir():
+        if item.is_dir() and pattern.match(item.name):
+            timestamp_folders.append(item)
+    
+    # Sort by modification time (newest first)
+    timestamp_folders.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    
+    # Remove folders beyond the limit
+    if len(timestamp_folders) > MAX_OUTPUT_FOLDERS:
+        for folder in timestamp_folders[MAX_OUTPUT_FOLDERS:]:
+            print(f"Removing old output folder: {folder}")
+            shutil.rmtree(folder)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_output_folders():
+    """
+    Cleanup old output folders before and after test session.
+    """
+    base_output_dir = Path("output")
+    base_output_dir.mkdir(exist_ok=True)
+    
+    # Cleanup before tests
+    cleanup_old_output_folders(base_output_dir)
+    
+    yield
+    
+    # Cleanup after tests
+    cleanup_old_output_folders(base_output_dir)
+
+
 @pytest.fixture
 def output_dir():
     """
-    Create output directory for test results.
+    Create timestamped output directory for test results.
+    
+    Format: output/yyyymmdd.hh.mm.ss
     """
-    output_path = Path("output")
+    base_output_dir = Path("output")
+    base_output_dir.mkdir(exist_ok=True)
+    
+    # Create timestamped folder
+    now = datetime.now()
+    timestamp = now.strftime("%Y%m%d.%H.%M.%S")
+    output_path = base_output_dir / timestamp
     output_path.mkdir(exist_ok=True)
+    
+    print(f"\n📁 Created output folder: {output_path}")
+    
     return output_path
 
 
