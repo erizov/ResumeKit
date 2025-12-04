@@ -1,0 +1,18 @@
+
+Backend Developer Position
+
+Responsibilities:
+- Develop server-side web applications
+- Work with databases (PostgreSQL, MongoDB)
+- Design and implement REST APIs
+- Optimize application performance
+
+Requirements:
+- Experience with Python/FastAPI or Java/Spring Boot
+- Knowledge of SQL and NoSQL databases
+- Experience with Docker and Kubernetes
+- Understanding of microservices architecture
+
+Nice to have:
+- Experience with Redis, RabbitMQ, Kafka
+- Knowledge of CI/CD processes

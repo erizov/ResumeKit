@@ -1,0 +1,142 @@
+"""
+Recommendation endpoint for tailoring resumes to job descriptions.
+
+The endpoint accepts either raw resume text or an uploaded file
+together with a job description, plus optional tailoring options
+such as languages and target roles.
+"""
+
+from typing import List
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from sqlalchemy.orm import Session
+
+from ..config import RATE_LIMIT_ENABLED
+from ..db import get_db
+from ..models import BaseResume, JobPosting, TailoredResume
+from ..schemas import LanguageCode, RecommendOptions, RecommendResult, TargetRole
+from ..services.preset_service import get_preset_by_language_and_industry
+from ..services.resume_parser import extract_text_from_upload
+from ..services.tailor import generate_tailored_resumes
+
+limiter = Limiter(key_func=get_remote_address)
+router = APIRouter()
+
+
+def _apply_rate_limit(func):
+    """
+    Conditionally apply rate limiting based on configuration.
+    """
+    if RATE_LIMIT_ENABLED:
+        return limiter.limit("10/hour")(func)
+    return func
+
+
+def _parse_comma_separated_enum(
+    raw: str | None,
+    enum_type: type[LanguageCode] | type[TargetRole],
+    default: List[LanguageCode] | List[TargetRole],
+):
+    """
+    Parse a comma-separated list of enum values from a form field.
+    """
+    if not raw:
+        return default
+
+    items = [item.strip().lower() for item in raw.split(",") if item.strip()]
+    if not items:
+        return default
+
+    result = []
+    for item in items:
+        try:
+            result.append(enum_type(item))
+        except ValueError as exc:
+            msg = f"Invalid value '{item}' for {enum_type.__name__}"
+            raise HTTPException(status_code=400, detail=msg) from exc
+    return result
+
+
+@router.post("/recommend", response_model=RecommendResult)
+@_apply_rate_limit
+async def recommend(
+    request: Request,
+    job_description: str = Form(...),
+    resume_text: str | None = Form(None),
+    resume_file: UploadFile | None = File(None),
+    languages: str | None = Form(None),
+    targets: str | None = Form(None),
+    aggressiveness: int = Form(2, ge=1, le=3),
+    db: Session = Depends(get_db),
+) -> RecommendResult:
+    """
+    Produce tailored resume drafts for the provided inputs.
+
+    The client may provide either raw resume text or an uploaded file.
+    Tailoring options such as languages and target roles can be passed
+    as comma-separated lists, for example: "en,ru" or "backend,gpt_engineer".
+
+    Rate limited to 10 requests per hour per IP address.
+    """
+    if not resume_text and not resume_file:
+        msg = "Either resume_text or resume_file must be provided."
+        raise HTTPException(status_code=400, detail=msg)
+
+    if resume_file and not resume_text:
+        base_resume = await extract_text_from_upload(resume_file)
+    else:
+        assert resume_text is not None
+        base_resume = resume_text
+
+    languages_list = _parse_comma_separated_enum(
+        languages, LanguageCode, [LanguageCode.EN, LanguageCode.RU]
+    )
+    targets_list = _parse_comma_separated_enum(
+        targets, TargetRole, [TargetRole.BACKEND]
+    )
+
+    options = RecommendOptions(
+        languages=languages_list,
+        targets=targets_list,
+        aggressiveness=aggressiveness,
+    )
+
+    resumes = generate_tailored_resumes(
+        base_resume_text=base_resume,
+        job_description=job_description,
+        options=options,
+    )
+
+    # Persist base resume, job posting, and tailored variants.
+    base_obj = BaseResume(text=base_resume)
+    job_obj = JobPosting(text=job_description)
+    db.add(base_obj)
+    db.add(job_obj)
+    db.flush()
+
+    db_objs: list[TailoredResume] = []
+    for r in resumes:
+        db_obj = TailoredResume(
+            language=r.language.value,
+            target=r.target.value,
+            content=r.content,
+            notes=r.notes,
+            base_resume_id=base_obj.id,
+            job_posting_id=job_obj.id,
+        )
+        db.add(db_obj)
+        db_objs.append(db_obj)
+
+    db.commit()
+
+    # Populate identifiers and timestamps on returned models so the
+    # client can reference specific tailored resumes later.
+    for r, db_obj in zip(resumes, db_objs, strict=False):
+        r.id = db_obj.id
+        r.created_at = db_obj.created_at
+
+    return RecommendResult(resumes=resumes)
+
+
