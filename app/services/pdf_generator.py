@@ -5,6 +5,7 @@ Converts resume text directly to PDF using reportlab.
 """
 
 import io
+import re
 
 try:
     from reportlab.lib.pagesizes import A4
@@ -41,6 +42,10 @@ def generate_pdf_from_text(resume_text: str) -> bytes:
             "reportlab is not installed. Install it with: pip install reportlab"
         )
 
+    # Clean the text before processing
+    from .resume_formatter import clean_resume_text
+    resume_text = clean_resume_text(resume_text)
+
     pdf_buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         pdf_buffer,
@@ -74,6 +79,16 @@ def generate_pdf_from_text(resume_text: str) -> bytes:
         spaceAfter=6,
     )
 
+    # Style for job title with date (right-aligned date)
+    job_title_style = ParagraphStyle(
+        "JobTitle",
+        parent=styles["Normal"],
+        fontSize=11,
+        leading=16,
+        spaceAfter=4,
+        alignment=2,  # Right alignment
+    )
+
     # Parse text into paragraphs
     lines = resume_text.splitlines()
     in_list = False
@@ -84,7 +99,7 @@ def generate_pdf_from_text(resume_text: str) -> bytes:
             if in_list:
                 story.append(Spacer(1, 6))
                 in_list = False
-            story.append(Spacer(1, 6))
+            # Only add one spacer for empty lines
             continue
 
         # Detect headers (all caps or lines ending with colon)
@@ -100,6 +115,21 @@ def generate_pdf_from_text(resume_text: str) -> bytes:
                 in_list = True
             bullet_text = f"• {line[2:]}"
             story.append(Paragraph(bullet_text, normal_style))
+        # Check if line has date pattern (job title with date)
+        elif re.search(r'\d{4}\s*[–-]\s*\d{4}', line):
+            if in_list:
+                story.append(Spacer(1, 6))
+                in_list = False
+            # Try to format with date on right
+            parts = re.split(r'(\d{4}\s*[–-]\s*\d{4})', line)
+            if len(parts) >= 2:
+                # Format with date on right using non-breaking spaces
+                title_part = parts[0].strip()
+                date_part = parts[1]
+                formatted = f"{title_part}  {date_part}"
+                story.append(Paragraph(formatted, normal_style))
+            else:
+                story.append(Paragraph(line, normal_style))
         else:
             if in_list:
                 story.append(Spacer(1, 6))

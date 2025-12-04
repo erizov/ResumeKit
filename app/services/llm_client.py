@@ -111,7 +111,15 @@ def generate_tailored_resume_llm(
         "Rewrite the resume for this specific job. "
         "Keep all employers, titles, and dates factual. "
         "Prioritise bullets and sections most relevant to the job. "
-        "Return ONLY the final resume text, no explanations."
+        "Return ONLY the final resume text, no explanations.\n\n"
+        "FORMATTING REQUIREMENTS:\n"
+        "- Remove all '--' separators and divider lines\n"
+        "- Remove excessive empty lines (maximum 1 empty line between sections)\n"
+        "- Keep the entire resume under 2 pages\n"
+        "- Format job titles and dates on the same line with dates aligned to the right\n"
+        "  Example: '*AVP / Программист-аналитик*  1998 – 2002'\n"
+        "- Use consistent spacing and formatting throughout\n"
+        "- Be concise and remove redundant information if needed to stay under 2 pages"
     )
 
     completion = client.chat.completions.create(
