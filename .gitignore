@@ -147,6 +147,10 @@ venv.bak/
 # Test output folders
 output/
 
+# Resume documents
+*.docx
+ResumeEugene*.docx
+
 # Spyder project settings
 .spyderproject
 .spyproject
