@@ -28,7 +28,7 @@ def get_preset_by_language_and_industry(
         StylePreset.language == language,
         StylePreset.industry == industry,
         StylePreset.is_active == True,  # noqa: E712
-    )
+    ).order_by(StylePreset.created_at.desc()).limit(1)
     result = db.execute(stmt).scalar_one_or_none()
     return result
 
