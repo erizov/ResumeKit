@@ -103,10 +103,46 @@ async def recommend(
         aggressiveness=aggressiveness,
     )
 
+    # Get style preset guidance based on language and industry
+    # Determine industry from target role (default to tech, can be expanded)
+    industry_map = {
+        "backend": "tech",
+        "fullstack": "tech",
+        "gpt_engineer": "tech",
+    }
+    industry = industry_map.get(
+        options.targets[0].value if options.targets else "backend", "tech"
+    )
+
+    preset_guidance = None
+    for language in options.languages:
+        preset = get_preset_by_language_and_industry(db, language.value, industry)
+        if preset:
+            # Combine preset guidance
+            guidance_parts = []
+            if preset.section_order:
+                guidance_parts.append(f"Section Order: {preset.section_order}")
+            if preset.formatting_rules:
+                guidance_parts.append(f"Formatting: {preset.formatting_rules}")
+            if preset.style_guidelines:
+                guidance_parts.append(f"Style: {preset.style_guidelines}")
+            if preset.tone_guidance:
+                guidance_parts.append(f"Tone: {preset.tone_guidance}")
+            if preset.length_guidelines:
+                guidance_parts.append(f"Length: {preset.length_guidelines}")
+            if preset.ats_keywords:
+                guidance_parts.append(
+                    f"ATS Keywords to consider: {preset.ats_keywords}"
+                )
+            if guidance_parts:
+                preset_guidance = "\n".join(guidance_parts)
+            break  # Use first matching preset
+
     resumes = generate_tailored_resumes(
         base_resume_text=base_resume,
         job_description=job_description,
         options=options,
+        preset_guidance=preset_guidance,
     )
 
     # Persist base resume, job posting, and tailored variants.
