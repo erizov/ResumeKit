@@ -133,6 +133,7 @@ const LoginPage: React.FC = () => {
             <Box component="form" onSubmit={handleSubmit} sx={{ width: "100%" }}>
               <Stack spacing={3}>
                 <TextField
+                  id="login-email"
                   label="Email or Username"
                   type="text"
                   value={email}
@@ -150,6 +151,7 @@ const LoginPage: React.FC = () => {
                 />
 
                 <TextField
+                  id="login-password"
                   label="Password"
                   type="password"
                   value={password}

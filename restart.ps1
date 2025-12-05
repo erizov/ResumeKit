@@ -82,7 +82,9 @@ Write-Host "[Restart] 🔥 Aggressively killing ALL backend Python processes..."
 try {
     # Method 1: Kill by port 8000 - MOST AGGRESSIVE
     $port8000Connections = Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue
-    $port8000Pids = $port8000Connections | Select-Object -ExpandProperty OwningProcess -Unique
+    $port8000Pids = $port8000Connections |
+        Where-Object { $_.OwningProcess -ne 0 } |
+        Select-Object -ExpandProperty OwningProcess -Unique
     if ($port8000Pids) {
         Write-Host "[Restart] Found $($port8000Pids.Count) process(es) on port 8000: $($port8000Pids -join ', ')" -ForegroundColor Yellow
     }
@@ -388,25 +390,26 @@ try {
 }
 
 # Double-check and force kill any remaining processes on ports (with retries)
-# Only check for LISTENING connections, ignore TIME_WAIT
+# Only check for LISTENING connections, ignore TIME_WAIT and PID 0/Idle
 $maxRetries = 5
 for ($retry = 1; $retry -le $maxRetries; $retry++) {
-    $backendPort = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
-    $frontendPort = Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue
+    $backendPort = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -ne 0 }
+    $frontendPort = Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -ne 0 }
     
     if ($backendPort) {
-        # Only check for LISTENING connections, not TIME_WAIT
         $listeningConnections = $backendPort | Where-Object { $_.State -eq "Listen" }
         if ($listeningConnections) {
             Write-Host "[Restart] ⚠️  Backend port 8000 still in use (attempt $retry/$maxRetries), forcing cleanup..." -ForegroundColor Yellow
             $listeningConnections | ForEach-Object { 
                 try {
                     $procId = $_.OwningProcess
-                    $proc = Get-Process -Id $procId -ErrorAction SilentlyContinue
-                    if ($proc) {
-                        Write-Host "[Restart] 🔥🔥🔥 FORCE KILLING process on port 8000 (PID: $procId)" -ForegroundColor Red
-                        Stop-ProcessTree -ProcessId $procId
-                        Start-Sleep -Milliseconds 500
+                    if ($procId -and $procId -ne 0) {
+                        $proc = Get-Process -Id $procId -ErrorAction SilentlyContinue
+                        if ($proc) {
+                            Write-Host "[Restart] 🔥🔥🔥 FORCE KILLING process on port 8000 (PID: $procId)" -ForegroundColor Red
+                            Stop-ProcessTree -ProcessId $procId
+                            Start-Sleep -Milliseconds 500
+                        }
                     }
                 } catch { }
             }
@@ -415,19 +418,20 @@ for ($retry = 1; $retry -le $maxRetries; $retry++) {
     
     if ($frontendPort) {
         Write-Host "[Restart] ⚠️  Frontend port 5173 still in use (attempt $retry/$maxRetries), forcing cleanup..." -ForegroundColor Yellow
-        Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | 
-            ForEach-Object { 
-                try {
-                    $procId = $_.OwningProcess
+        $frontendPort | ForEach-Object { 
+            try {
+                $procId = $_.OwningProcess
+                if ($procId -and $procId -ne 0) {
                     Write-Host "[Restart] 🔥 Force killing process on port 5173 (PID: $procId)" -ForegroundColor Red
                     & taskkill /F /PID $procId /T 2>&1 | Out-Null
                     Start-Sleep -Milliseconds 200
                     Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
-                } catch { }
-            }
+                }
+            } catch { }
+        }
     }
     
-    # If both ports are free, break
+    # If both ports are free (or only PID 0/TIME_WAIT remains), break
     if (-not $backendPort -and -not $frontendPort) {
         break
     }

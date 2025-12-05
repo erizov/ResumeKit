@@ -11,7 +11,7 @@ import os
 import sys
 from typing import List
 
-from ..config import OPENAI_API_KEY
+from ..config import OPENAI_API_KEY, RESUMEKIT_USE_OPENAI
 from ..schemas import LanguageCode, RecommendOptions, TailoredResume, TargetRole
 from .llm_client import generate_tailored_resume_llm
 
@@ -38,7 +38,8 @@ def generate_tailored_resumes(
     - OPENAI_API_KEY is configured (auto-enable)
     """
     # Auto-enable OpenAI if API key is configured, unless explicitly disabled
-    explicit_flag = os.getenv("RESUMEKIT_USE_OPENAI", "").lower()
+    # Prefer value from config (loaded via .env), fallback to direct env read
+    explicit_flag = (RESUMEKIT_USE_OPENAI or os.getenv("RESUMEKIT_USE_OPENAI", "")).lower()
     has_api_key = bool(OPENAI_API_KEY)
     
     use_llm = (

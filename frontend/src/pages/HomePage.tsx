@@ -220,6 +220,7 @@ const HomePage: React.FC = () => {
           <Stack spacing={2}>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <TextField
+                id="job-url"
                 label="Job posting URL (optional)"
                 placeholder="https://example.com/job-posting"
                 value={jobUrl}
@@ -241,6 +242,7 @@ const HomePage: React.FC = () => {
             </Stack>
 
             <TextField
+              id="job-description"
               label="Job description or job ad text"
               multiline
               minRows={4}
@@ -251,6 +253,7 @@ const HomePage: React.FC = () => {
             />
 
             <TextField
+              id="resume-text"
               label="Resume text (optional if uploading file)"
               multiline
               minRows={4}
@@ -289,6 +292,7 @@ const HomePage: React.FC = () => {
               sx={{ "& > *": { minWidth: { xs: "100%", sm: "auto" } } }}
             >
               <TextField
+                id="languages"
                 label="Languages"
                 helperText="Comma separated, e.g. en,ru"
                 value={languages}
@@ -297,6 +301,7 @@ const HomePage: React.FC = () => {
                 size="small"
               />
               <TextField
+                id="targets"
                 label="Targets"
                 helperText="Comma separated, e.g. backend,gpt_engineer"
                 value={targets}
@@ -306,6 +311,7 @@ const HomePage: React.FC = () => {
               />
               <TextField
                 select
+                id="aggressiveness"
                 label="Aggressiveness"
                 value={aggressiveness}
                 onChange={(e) => setAggressiveness(Number(e.target.value))}

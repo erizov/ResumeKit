@@ -24,6 +24,8 @@ OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
 OPENAI_API_BASE: str | None = os.getenv(
     "OPENAI_API_BASE", "https://api.openai.com/v1"
 )
+# Flag to force enabling/disabling OpenAI usage
+RESUMEKIT_USE_OPENAI: str = os.getenv("RESUMEKIT_USE_OPENAI", "")
 
 AUTH_SECRET_KEY: str | None = os.getenv("AUTH_SECRET_KEY")
 # Token expiration in hours (default: 10 hours)

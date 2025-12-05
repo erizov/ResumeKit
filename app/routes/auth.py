@@ -10,46 +10,11 @@ from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..config import AUTH_SECRET_KEY
-import os
-from pathlib import Path
-from dotenv import load_dotenv
-
-def _get_auth_secret_key():
-    """Get AUTH_SECRET_KEY, ensuring .env is loaded."""
-    # Try to read directly from .env file first
-    env_path = Path(__file__).parent.parent.parent / ".env"
-    if env_path.exists():
-        # Read .env file directly
-        with open(env_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    key = key.strip()
-                    value = value.strip().strip('"').strip("'")
-                    if key == 'AUTH_SECRET_KEY' and value:
-                        print(f"[Auth] _get_auth_secret_key: Found key in .env file (length: {len(value)})")
-                        return value
-        
-        # If not found in file, try load_dotenv
-        load_dotenv(dotenv_path=env_path, override=True)
-        key = os.getenv("AUTH_SECRET_KEY")
-        if key:
-            print(f"[Auth] _get_auth_secret_key: Found key via load_dotenv (length: {len(key)})")
-            return key
-    
-    # Fallback to config module value
-    if AUTH_SECRET_KEY:
-        print(f"[Auth] _get_auth_secret_key: Using config module value (length: {len(AUTH_SECRET_KEY)})")
-        return AUTH_SECRET_KEY
-    
-    print("[Auth] _get_auth_secret_key: WARNING - No AUTH_SECRET_KEY found!")
-    return None
 from ..db import get_db
 from ..models import User
 from ..schemas import Token, UserLogin, UserResponse, UserSignup
 from ..services.auth import (
+    _get_auth_secret_key,
     create_access_token,
     decode_access_token,
     get_password_hash,
