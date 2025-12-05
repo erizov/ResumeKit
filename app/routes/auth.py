@@ -225,4 +225,3 @@ def logout() -> dict[str, str]:
     """
     return {"message": "Successfully logged out"}
 
-
