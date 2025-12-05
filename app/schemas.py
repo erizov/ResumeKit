@@ -252,6 +252,7 @@ class UserResponse(BaseModel):
 
     id: int
     email: str
+    user_level: int = 10
     created_at: datetime
 
 

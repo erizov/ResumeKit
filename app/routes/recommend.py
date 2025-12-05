@@ -6,17 +6,27 @@ together with a job description, plus optional tailoring options
 such as languages and target roles.
 """
 
-from typing import List
+import sys
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+
+# Ensure print statements flush immediately
+def _flush_print(*args, **kwargs):
+    """Print and immediately flush stdout."""
+    print(*args, **kwargs)
+    sys.stdout.flush()
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..config import RATE_LIMIT_ENABLED
 from ..db import get_db
-from ..models import BaseResume, JobPosting, TailoredResume
+from ..models import BaseResume, JobPosting, TailoredResume, User
+from ..routes.auth import get_current_user
 from ..schemas import LanguageCode, RecommendOptions, RecommendResult, TargetRole
+from ..services.job_parser import fetch_job_description_from_url
 from ..services.preset_service import get_preset_by_language_and_industry
 from ..services.resume_parser import extract_text_from_upload
 from ..services.tailor import generate_tailored_resumes
@@ -63,23 +73,67 @@ def _parse_comma_separated_enum(
 @_apply_rate_limit
 async def recommend(
     request: Request,
-    job_description: str = Form(...),
+    job_description: str = Form(""),
+    job_url: str = Form(""),
     resume_text: str | None = Form(None),
     resume_file: UploadFile | None = File(None),
     languages: str | None = Form(None),
     targets: str | None = Form(None),
     aggressiveness: int = Form(2, ge=1, le=3),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> RecommendResult:
     """
     Produce tailored resume drafts for the provided inputs.
 
     The client may provide either raw resume text or an uploaded file.
+    Either job_description or job_url must be provided. If job_url is
+    provided, the description will be fetched from the URL.
     Tailoring options such as languages and target roles can be passed
     as comma-separated lists, for example: "en,ru" or "backend,gpt_engineer".
 
     Rate limited to 10 requests per hour per IP address.
     """
+    _flush_print("=" * 80)
+    _flush_print("[Recommend] ===== RECOMMEND ENDPOINT CALLED =====")
+    _flush_print(f"[Recommend] DEBUG: User ID: {current_user.id}")
+    _flush_print(f"[Recommend] DEBUG: Has job_description: {job_description is not None}")
+    _flush_print(f"[Recommend] DEBUG: Has job_url: {job_url is not None}")
+    _flush_print(f"[Recommend] DEBUG: Has resume_text: {resume_text is not None}")
+    _flush_print(f"[Recommend] DEBUG: Has resume_file: {resume_file is not None}")
+    _flush_print("=" * 80)
+    
+    # Normalize empty strings to None (handle both None and empty string cases)
+    if job_description:
+        job_description = job_description.strip()
+        if not job_description:
+            job_description = None
+    if job_url:
+        job_url = job_url.strip()
+        if not job_url:
+            job_url = None
+    
+    # Validate job description or URL
+    if not job_description and not job_url:
+        msg = "Either job_description or job_url must be provided."
+        raise HTTPException(status_code=400, detail=msg)
+    
+    # Fetch job description from URL if provided
+    if job_url and not job_description:
+        try:
+            _flush_print(f"[Recommend] DEBUG: Fetching job description from URL: {job_url}")
+            job_description = await fetch_job_description_from_url(job_url)
+            _flush_print(f"[Recommend] DEBUG: Fetched job description length: {len(job_description)}")
+        except Exception as exc:
+            msg = f"Failed to fetch job description from URL: {str(exc)}"
+            _flush_print(f"[Recommend] ERROR: {msg}")
+            raise HTTPException(status_code=400, detail=msg) from exc
+    
+    # Final check - job_description must be set at this point
+    if not job_description:
+        msg = "Job description is required (either provided directly or fetched from URL)."
+        raise HTTPException(status_code=400, detail=msg)
+    
     if not resume_text and not resume_file:
         msg = "Either resume_text or resume_file must be provided."
         raise HTTPException(status_code=400, detail=msg)
@@ -138,16 +192,39 @@ async def recommend(
                 preset_guidance = "\n".join(guidance_parts)
             break  # Use first matching preset
 
+    # Check user's resume limit
+    resume_count = db.scalar(
+        select(func.count(TailoredResume.id))
+        .join(BaseResume)
+        .where(BaseResume.user_id == current_user.id)
+    ) or 0
+    
+    if resume_count >= current_user.user_level:
+        raise HTTPException(
+            status_code=403,
+            detail=f"You have reached your resume limit of {current_user.user_level}. Please delete some resumes or upgrade your account.",
+        )
+
+    _flush_print(f"[Recommend] DEBUG: About to call generate_tailored_resumes()")
+    _flush_print(f"[Recommend] DEBUG: base_resume length={len(base_resume)}")
+    _flush_print(f"[Recommend] DEBUG: job_description length={len(job_description)}")
+    _flush_print(f"[Recommend] DEBUG: options.languages={[l.value for l in options.languages]}")
+    _flush_print(f"[Recommend] DEBUG: options.targets={[t.value for t in options.targets]}")
+    
     resumes = generate_tailored_resumes(
         base_resume_text=base_resume,
         job_description=job_description,
         options=options,
         preset_guidance=preset_guidance,
     )
+    
+    _flush_print(f"[Recommend] DEBUG: generate_tailored_resumes returned {len(resumes)} resumes")
+    for i, resume in enumerate(resumes):
+        _flush_print(f"[Recommend] DEBUG: Resume {i}: language={resume.language}, target={resume.target}, content_length={len(resume.content)}, notes={resume.notes}")
 
     # Persist base resume, job posting, and tailored variants.
-    base_obj = BaseResume(text=base_resume)
-    job_obj = JobPosting(text=job_description)
+    base_obj = BaseResume(text=base_resume, user_id=current_user.id)
+    job_obj = JobPosting(text=job_description, user_id=current_user.id)
     db.add(base_obj)
     db.add(job_obj)
     db.flush()

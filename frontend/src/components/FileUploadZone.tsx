@@ -93,17 +93,25 @@ const FileUploadZone: React.FC<FileUploadZoneProps> = ({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         sx={{
-          p: { xs: 2, sm: 4 },
+          p: { xs: 3, sm: 5 },
           border: 2,
           borderStyle: "dashed",
           borderColor: isDragging ? "primary.main" : "grey.300",
-          backgroundColor: isDragging ? "action.hover" : "background.paper",
+          backgroundColor: isDragging 
+            ? "rgba(102, 126, 234, 0.05)" 
+            : "linear-gradient(to bottom, #ffffff 0%, #f8f9ff 100%)",
+          backgroundImage: isDragging 
+            ? "none" 
+            : "linear-gradient(to bottom, #ffffff 0%, #f8f9ff 100%)",
           textAlign: "center",
           cursor: "pointer",
-          transition: "all 0.2s ease-in-out",
+          transition: "all 0.3s ease-in-out",
+          borderRadius: 3,
           "&:hover": {
             borderColor: "primary.main",
-            backgroundColor: "action.hover",
+            backgroundColor: "rgba(102, 126, 234, 0.05)",
+            transform: "translateY(-2px)",
+            boxShadow: "0 4px 12px rgba(102, 126, 234, 0.15)",
           },
         }}
       >
@@ -117,9 +125,16 @@ const FileUploadZone: React.FC<FileUploadZoneProps> = ({
         <label htmlFor="file-upload-input" style={{ cursor: "pointer" }}>
           <CloudUpload 
             sx={{ 
-              fontSize: { xs: 36, sm: 48 }, 
-              color: "primary.main", 
-              mb: { xs: 1, sm: 2 } 
+              fontSize: { xs: 48, sm: 64 }, 
+              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+              mb: { xs: 1.5, sm: 2 },
+              transition: "transform 0.3s ease-in-out",
+              "&:hover": {
+                transform: "scale(1.1)"
+              }
             }} 
           />
           <Typography 

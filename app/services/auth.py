@@ -10,7 +10,7 @@ from typing import Any
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from ..config import AUTH_SECRET_KEY, AUTH_TOKEN_EXPIRE_MINUTES
+from ..config import AUTH_SECRET_KEY, AUTH_TOKEN_EXPIRE_HOURS
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -73,7 +73,7 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
     if expires_delta:
         expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(UTC) + timedelta(minutes=AUTH_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(UTC) + timedelta(hours=AUTH_TOKEN_EXPIRE_HOURS)
 
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, AUTH_SECRET_KEY, algorithm=ALGORITHM)

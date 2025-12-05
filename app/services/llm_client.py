@@ -8,13 +8,20 @@ the rest of the application can depend on a small, well-typed surface.
 from __future__ import annotations
 
 import json
+import sys
 from typing import Optional
 
 from openai import OpenAI
 
-from ..config import OPENAI_API_BASE, OPENAI_API_KEY
+from ..config import OPENAI_API_BASE, OPENAI_API_KEY, OPENAI_MODEL
 from ..schemas import LanguageCode, StructuredResume, TargetRole
 from .humanizer import humanize_text
+
+# Ensure print statements flush immediately
+def _flush_print(*args, **kwargs):
+    """Print and immediately flush stdout."""
+    print(*args, **kwargs)
+    sys.stdout.flush()
 
 
 _CLIENT: Optional[OpenAI] = None
@@ -26,14 +33,20 @@ def _get_client() -> OpenAI:
     """
     global _CLIENT
     if _CLIENT is None:
-        api_key = OPENAI_API_KEY
-        if not api_key:
+        _flush_print(f"[LLM Client] DEBUG: Initializing OpenAI client...")
+        _flush_print(f"[LLM Client] DEBUG: OPENAI_API_KEY present: {bool(OPENAI_API_KEY)}")
+        _flush_print(f"[LLM Client] DEBUG: OPENAI_API_BASE: {OPENAI_API_BASE}")
+        if not OPENAI_API_KEY:
             msg = "OPENAI_API_KEY environment variable is not set."
+            _flush_print(f"[LLM Client] ERROR: {msg}")
             raise RuntimeError(msg)
-        if OPENAI_API_BASE:
-            _CLIENT = OpenAI(api_key=api_key, base_url=OPENAI_API_BASE)
-        else:
-            _CLIENT = OpenAI(api_key=api_key)
+        _CLIENT = OpenAI(
+            api_key=OPENAI_API_KEY,
+            base_url=OPENAI_API_BASE
+        )
+        _flush_print(f"[LLM Client] DEBUG: OpenAI client initialized successfully")
+    else:
+        _flush_print(f"[LLM Client] DEBUG: Using existing OpenAI client")
     return _CLIENT
 
 
@@ -55,7 +68,13 @@ def generate_tailored_resume_llm(
     from ..config import RAG_ENABLED, RAG_TOP_K
     from .rag_service import get_rag_service
 
+    _flush_print(f"[LLM Client] DEBUG: Starting generate_tailored_resume_llm()")
+    _flush_print(f"[LLM Client] DEBUG: RAG_ENABLED={RAG_ENABLED}, RAG_TOP_K={RAG_TOP_K}")
+    _flush_print(f"[LLM Client] DEBUG: Language={language.value}, Target={target.value}")
+    
+    _flush_print(f"[LLM Client] DEBUG: Getting OpenAI client...")
     client = _get_client()
+    _flush_print(f"[LLM Client] DEBUG: OpenAI client obtained")
 
     style_hint = _language_style_hint(language)
     target_label = target.value.replace("_", " ")
@@ -63,6 +82,7 @@ def generate_tailored_resume_llm(
     # Retrieve best practices using RAG if enabled
     rag_context = ""
     if RAG_ENABLED:
+        _flush_print(f"[LLM Client] DEBUG: RAG enabled, retrieving best practices...")
         try:
             rag_service = get_rag_service()
             best_practices = rag_service.retrieve_best_practices(
@@ -73,6 +93,7 @@ def generate_tailored_resume_llm(
             )
 
             if best_practices:
+                _flush_print(f"[LLM Client] DEBUG: RAG returned {len(best_practices)} best practices")
                 rag_context = "\n\nMARKET-SPECIFIC BEST PRACTICES:\n"
                 rag_context += "=" * 50 + "\n"
                 for i, practice in enumerate(best_practices, 1):
@@ -80,9 +101,13 @@ def generate_tailored_resume_llm(
                     practice_text = practice[:1000] + "..." if len(practice) > 1000 else practice
                     rag_context += f"\n[Best Practice {i}]\n{practice_text}\n"
                 rag_context += "=" * 50 + "\n"
+            else:
+                _flush_print(f"[LLM Client] DEBUG: RAG returned no best practices")
         except Exception as e:
             # If RAG fails, continue without it
-            print(f"Warning: RAG retrieval failed: {e}")
+            _flush_print(f"[LLM Client] WARNING: RAG retrieval failed: {e}")
+            import traceback
+            traceback.print_exc()
 
     # Add preset guidance if provided
     preset_context = ""
@@ -90,33 +115,67 @@ def generate_tailored_resume_llm(
         preset_context = f"\n\nSTYLE PRESET GUIDANCE:\n{preset_guidance}\n"
 
     system_prompt = (
-        "You are an assistant that rewrites CVs truthfully and concisely. "
-        "You must never invent jobs, employers, dates, or achievements. "
-        "You may only rephrase and re-order the existing material. "
-        "Use a structure suitable for modern ATS systems. "
-        "IMPORTANT: Write in a natural, human style. Avoid AI stigmas like: "
+        "You are an expert resume tailoring assistant. Your job is to "
+        "rewrite and customize resumes to match specific job descriptions. "
+        "CRITICAL REQUIREMENTS:\n"
+        "1. You must NEVER invent jobs, employers, dates, or achievements.\n"
+        "2. You may ONLY rephrase, reorder, and emphasize existing material.\n"
+        "3. You MUST tailor the resume to highlight skills and experience "
+        "that match the job description.\n"
+        "4. Prioritize and reorder sections/bullets to match job requirements.\n"
+        "5. Use keywords from the job description naturally in your rewrites.\n"
+        "6. Remove or de-emphasize irrelevant experience if needed to stay "
+        "under 2 pages.\n"
+        "7. Use a structure suitable for modern ATS systems.\n"
+        "8. Write in a natural, human style. Avoid AI stigmas like: "
         "excessive use of 'leverage', 'utilize', 'robust', 'cutting-edge', "
-        "'seamlessly', 'synergy'. Use simple, direct language. Vary sentence "
-        "structure naturally. Don't be overly enthusiastic or perfect."
+        "'seamlessly', 'synergy'. Use simple, direct language. "
+        "Vary sentence structure naturally. Don't be overly enthusiastic "
+        "or perfect.\n"
         f"{rag_context}"
         f"{preset_context}"
     )
 
+    # Explicitly state the output language requirement
+    language_instruction = ""
+    if language is LanguageCode.RU:
+        language_instruction = (
+            "CRITICAL: You MUST write the ENTIRE resume in RUSSIAN. "
+            "All text, section headings, and content must be in Russian. "
+            "Use Russian business terminology and formatting conventions.\n\n"
+        )
+    else:
+        language_instruction = (
+            "CRITICAL: You MUST write the ENTIRE resume in ENGLISH. "
+            "All text, section headings, and content must be in English. "
+            "Use English business terminology and formatting conventions.\n\n"
+        )
+    
     user_prompt = (
-        f"LANGUAGE: {language.value}\n"
+        f"LANGUAGE: {language.value.upper()}\n"
         f"TARGET ROLE: {target_label}\n"
         f"AGGRESSIVENESS: {aggressiveness} "
         "(1=minimal edits, 2=balanced, 3=strong rewrite of wording only)\n"
         f"STYLE HINTS: {style_hint}\n\n"
+        f"{language_instruction}"
         "JOB DESCRIPTION:\n"
         f"{job_description}\n\n"
         "BASE RESUME:\n"
         f"{base_resume_text}\n\n"
         "TASK:\n"
-        "Rewrite the resume for this specific job. "
-        "Keep all employers, titles, and dates factual. "
-        "Prioritise bullets and sections most relevant to the job. "
-        "Return ONLY the final resume text, no explanations.\n\n"
+        "Rewrite and tailor the resume specifically for this job description. "
+        "You MUST customize the content to match the job requirements:\n"
+        "- Reorder sections to put most relevant experience first\n"
+        "- Rewrite bullet points to emphasize skills mentioned in the job "
+        "description\n"
+        "- Use keywords from the job description naturally throughout\n"
+        "- Remove or minimize irrelevant experience if needed\n"
+        "- Keep all employers, titles, and dates 100% factual (never invent)\n"
+        "- Make sure the tailored resume is clearly different from the "
+        "original base resume\n"
+        "- IMPORTANT: The output language MUST match the LANGUAGE specified above\n"
+        "Return ONLY the final tailored resume text, no explanations or "
+        "metadata.\n\n"
         "FORMATTING REQUIREMENTS:\n"
         "- Remove all '--' separators and divider lines\n"
         "- Remove excessive empty lines (maximum 1 empty line between sections)\n"
@@ -127,17 +186,69 @@ def generate_tailored_resume_llm(
         "- Be concise and remove redundant information if needed to stay under 2 pages"
     )
 
-    completion = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.4,
-    )
+    _flush_print(f"[LLM Client] DEBUG: Calling OpenAI API with model={OPENAI_MODEL}")
+    _flush_print(f"[LLM Client] DEBUG: System prompt length={len(system_prompt)}")
+    _flush_print(f"[LLM Client] DEBUG: User prompt length={len(user_prompt)}")
+    _flush_print(f"[LLM Client] DEBUG: Job description length={len(job_description)}")
+    _flush_print(f"[LLM Client] DEBUG: Base resume length={len(base_resume_text)}")
+    _flush_print(f"[LLM Client] DEBUG: Language={language.value}, Target={target.value}")
+    
+    try:
+        _flush_print(f"[LLM Client] INFO: Making OpenAI API call...")
+        completion = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.4,
+        )
+        _flush_print(f"[LLM Client] DEBUG: OpenAI API call successful")
+        _flush_print(f"[LLM Client] DEBUG: Response choices count={len(completion.choices)}")
+    except Exception as e:
+        _flush_print(f"[LLM Client] ERROR: OpenAI API call failed: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        error_msg = (
+            f"OpenAI API error: {str(e)}. "
+            "Falling back to base resume with tailoring notes."
+        )
+        _flush_print(f"[LLM Client] {error_msg}")
+        # Return base resume with a note that tailoring failed
+        return (
+            f"[TAILORING FAILED - API Error]\n"
+            f"Error: {str(e)}\n\n"
+            f"Original resume:\n{base_resume_text}"
+        )
 
     content = completion.choices[0].message.content or ""
+    _flush_print(f"[LLM Client] DEBUG: Raw response length={len(content)}")
     cleaned_content = content.strip()
+    _flush_print(f"[LLM Client] DEBUG: Cleaned content length={len(cleaned_content)}")
+    
+    # Validate that we got a tailored resume, not just the original
+    if not cleaned_content or len(cleaned_content) < 50:
+        _flush_print(
+            "[LLM Client] Warning: Received very short or empty response. "
+            "Falling back to base resume."
+        )
+        return (
+            f"[TAILORING FAILED - Empty Response]\n\n"
+            f"Original resume:\n{base_resume_text}"
+        )
+    
+    # Check if the response is suspiciously similar to the base resume
+    # (simple heuristic: if more than 90% of base resume words appear in same order)
+    base_words = base_resume_text.lower().split()
+    response_words = cleaned_content.lower().split()
+    if len(base_words) > 0 and len(response_words) > 0:
+        # Simple check: if response is almost identical length and structure
+        length_ratio = len(response_words) / len(base_words)
+        if 0.95 <= length_ratio <= 1.05 and cleaned_content.strip() == base_resume_text.strip():
+            _flush_print(
+                "[LLM Client] Warning: Response appears identical to base resume. "
+                "This may indicate the model didn't tailor properly."
+            )
     
     # Post-process to clean formatting
     from .resume_formatter import clean_resume_text, format_dates_on_right
@@ -233,14 +344,19 @@ def generate_cover_letter_llm(
         "Return ONLY the cover letter text, no explanations."
     )
 
-    completion = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.7,  # Slightly higher for more natural variation
-    )
+    try:
+        completion = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.7,  # Slightly higher for more natural variation
+        )
+    except Exception as e:
+        error_msg = f"OpenAI API error: {str(e)}"
+        _flush_print(f"[LLM Client] {error_msg}")
+        raise RuntimeError(f"Failed to generate cover letter: {error_msg}")
 
     content = completion.choices[0].message.content or ""
     cleaned = content.strip()
@@ -309,15 +425,23 @@ def parse_resume_to_structured(resume_text: str) -> StructuredResume:
 
     user_prompt = f"Parse this resume:\n\n{resume_text}"
 
-    completion = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.1,  # Low temperature for consistent parsing
-        response_format={"type": "json_object"},
-    )
+    try:
+        completion = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.1,  # Low temperature for consistent parsing
+            response_format={"type": "json_object"},
+        )
+    except Exception as e:
+        error_msg = f"OpenAI API error: {str(e)}"
+        _flush_print(f"[LLM Client] {error_msg}")
+        # Return minimal structured resume on error
+        return StructuredResume(
+            summary=resume_text[:500] if resume_text else None
+        )
 
     content = completion.choices[0].message.content or "{}"
     try:

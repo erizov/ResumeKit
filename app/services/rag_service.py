@@ -31,7 +31,7 @@ class RAGService:
         if OPENAI_API_KEY:
             self.client = OpenAI(
                 api_key=OPENAI_API_KEY,
-                base_url=OPENAI_API_BASE or "https://api.openai.com/v1",
+                base_url=OPENAI_API_BASE
             )
 
         self.knowledge_base_path = Path("knowledge_base")

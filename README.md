@@ -129,6 +129,24 @@ By default Vite runs on `http://localhost:5173` and proxies `/api`
 to `http://localhost:8000`, so the React UI can call the FastAPI
 backend without CORS issues.
 
+### Environment Configuration
+
+Create a `.env` file in the project root (copy from `.env.example`):
+
+```bash
+# Authentication
+AUTH_SECRET_KEY=your_secret_key_here
+AUTH_TOKEN_EXPIRE_HOURS=10  # Session expiration in hours (default: 10)
+
+# OpenAI (optional, for AI features)
+OPENAI_API_KEY=sk-...
+```
+
+**Important:** 
+- The `.env` file is gitignored. Never commit secrets to the repository.
+- Session expiration is configurable via `AUTH_TOKEN_EXPIRE_HOURS` (default: 10 hours)
+- Expired sessions automatically redirect users to the login page
+
 ### Enabling real OpenAI tailoring
 
 By default the backend uses a deterministic stub implementation for

@@ -11,6 +11,41 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import AUTH_SECRET_KEY
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+def _get_auth_secret_key():
+    """Get AUTH_SECRET_KEY, ensuring .env is loaded."""
+    # Try to read directly from .env file first
+    env_path = Path(__file__).parent.parent.parent / ".env"
+    if env_path.exists():
+        # Read .env file directly
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    value = value.strip().strip('"').strip("'")
+                    if key == 'AUTH_SECRET_KEY' and value:
+                        print(f"[Auth] _get_auth_secret_key: Found key in .env file (length: {len(value)})")
+                        return value
+        
+        # If not found in file, try load_dotenv
+        load_dotenv(dotenv_path=env_path, override=True)
+        key = os.getenv("AUTH_SECRET_KEY")
+        if key:
+            print(f"[Auth] _get_auth_secret_key: Found key via load_dotenv (length: {len(key)})")
+            return key
+    
+    # Fallback to config module value
+    if AUTH_SECRET_KEY:
+        print(f"[Auth] _get_auth_secret_key: Using config module value (length: {len(AUTH_SECRET_KEY)})")
+        return AUTH_SECRET_KEY
+    
+    print("[Auth] _get_auth_secret_key: WARNING - No AUTH_SECRET_KEY found!")
+    return None
 from ..db import get_db
 from ..models import User
 from ..schemas import Token, UserLogin, UserResponse, UserSignup
@@ -42,27 +77,35 @@ def get_current_user(
     Raises:
         HTTPException: If token is invalid or user not found.
     """
-    if not AUTH_SECRET_KEY:
+    # Authentication check
+    auth_key = _get_auth_secret_key()
+    if not auth_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Authentication is not configured",
         )
-
+    
+    # Extract and verify JWT token
     try:
-        payload = decode_access_token(credentials.credentials)
+        token = credentials.credentials
+        payload = decode_access_token(token)
         user_id_str = payload.get("sub")
-        if user_id_str is None:
+        if not user_id_str:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials",
+                detail="Invalid token: missing user ID",
             )
-        # Convert string back to integer
         user_id = int(user_id_str)
-    except (JWTError, ValueError, TypeError) as exc:
+    except (ValueError, JWTError) as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-        ) from exc
+            detail=f"Invalid token: {str(e)}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Token parsing failed: {str(e)}",
+        ) from e
 
     user = db.scalar(select(User).where(User.id == user_id))
     if user is None:
@@ -104,7 +147,12 @@ def signup(user_data: UserSignup, db: Session = Depends(get_db)) -> UserResponse
     db.commit()
     db.refresh(user)
 
-    return UserResponse(id=user.id, email=user.email, created_at=user.created_at)
+    return UserResponse(
+        id=user.id, 
+        email=user.email, 
+        user_level=user.user_level,
+        created_at=user.created_at
+    )
 
 
 @router.post("/login", response_model=Token)
@@ -122,10 +170,14 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)) -> Token:
     Raises:
         HTTPException: If credentials are invalid.
     """
-    if not AUTH_SECRET_KEY:
+    print(f"[Auth] Login attempt for: {credentials.email}")
+    
+    # Authentication check
+    auth_key = _get_auth_secret_key()
+    if not auth_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication is not configured",
+            detail="Authentication is not configured. Please set AUTH_SECRET_KEY.",
         )
 
     # Find user by email
@@ -155,6 +207,7 @@ def get_current_user_info(current_user: User = Depends(get_current_user)) -> Use
     return UserResponse(
         id=current_user.id,
         email=current_user.email,
+        user_level=current_user.user_level,
         created_at=current_user.created_at,
     )
 

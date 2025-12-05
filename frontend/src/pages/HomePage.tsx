@@ -64,8 +64,9 @@ const HomePage: React.FC = () => {
     setError(null);
     setResult(null);
 
-    if (!jobDescription) {
-      setError("Please provide a job description.");
+    // Job description or URL is required
+    if (!jobDescription && !jobUrl.trim()) {
+      setError("Please provide either a job description or a job URL.");
       return;
     }
 
@@ -75,7 +76,9 @@ const HomePage: React.FC = () => {
     }
 
     const formData = new FormData();
-    formData.append("job_description", jobDescription);
+    // Always send these fields (even if empty) to satisfy FastAPI form validation
+    formData.append("job_description", jobDescription || "");
+    formData.append("job_url", jobUrl.trim() || "");
     if (resumeFile) {
       formData.append("resume_file", resumeFile);
     } else {
@@ -179,15 +182,40 @@ const HomePage: React.FC = () => {
 
   return (
     <>
-      <Typography 
-        variant="h4" 
-        gutterBottom
-        sx={{ fontSize: { xs: "1.75rem", sm: "2.125rem" } }}
-      >
-        Tailor Resume to Job
-      </Typography>
+      <Box sx={{ mb: 4 }}>
+        <Typography 
+          variant="h4" 
+          gutterBottom
+          sx={{ 
+            fontSize: { xs: "1.75rem", sm: "2.125rem", md: "2.5rem" },
+            fontWeight: 700,
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            backgroundClip: "text",
+            mb: 1
+          }}
+        >
+          Tailor Your Resume to Any Job
+        </Typography>
+        <Typography 
+          variant="body1" 
+          color="text.secondary"
+          sx={{ fontSize: { xs: "0.95rem", sm: "1.1rem" } }}
+        >
+          Upload your resume and job description to get AI-powered, tailored resumes optimized for each position
+        </Typography>
+      </Box>
 
-      <Paper sx={{ p: { xs: 2, sm: 3 }, mb: { xs: 2, sm: 4 } }} elevation={3}>
+      <Paper 
+        sx={{ 
+          p: { xs: 3, sm: 4, md: 5 }, 
+          mb: { xs: 3, sm: 4 },
+          background: "linear-gradient(to bottom, #ffffff 0%, #f8f9ff 100%)",
+          border: "1px solid rgba(102, 126, 234, 0.1)"
+        }} 
+        elevation={2}
+      >
         <form onSubmit={handleSubmit}>
           <Stack spacing={2}>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
@@ -304,16 +332,30 @@ const HomePage: React.FC = () => {
               </Typography>
             )}
 
-            <Box>
+            <Box sx={{ pt: 1 }}>
               <Button
                 variant="contained"
                 type="submit"
                 disabled={loading}
                 fullWidth={false}
                 size="large"
-                sx={{ minWidth: { xs: "100%", sm: "200px" } }}
+                sx={{ 
+                  minWidth: { xs: "100%", sm: "250px" },
+                  py: 1.5,
+                  px: 4,
+                  fontSize: "1rem",
+                  fontWeight: 600,
+                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  boxShadow: "0 4px 12px rgba(102, 126, 234, 0.4)",
+                  "&:hover": {
+                    background: "linear-gradient(135deg, #764ba2 0%, #667eea 100%)",
+                    boxShadow: "0 6px 16px rgba(102, 126, 234, 0.5)",
+                    transform: "translateY(-2px)"
+                  },
+                  transition: "all 0.3s ease-in-out"
+                }}
               >
-                Generate tailored resumes
+                {loading ? "Generating..." : "Generate Tailored Resumes"}
               </Button>
             </Box>
           </Stack>
@@ -321,17 +363,30 @@ const HomePage: React.FC = () => {
       </Paper>
 
       {result && (
-        <Stack spacing={2}>
+        <Stack spacing={3} sx={{ mt: 4 }}>
           <Typography 
             variant="h5"
-            sx={{ fontSize: { xs: "1.5rem", sm: "1.75rem" } }}
+            sx={{ 
+              fontSize: { xs: "1.5rem", sm: "1.75rem", md: "2rem" },
+              fontWeight: 700,
+              color: "primary.main"
+            }}
           >
-            Results
+            Generated Resumes
           </Typography>
           {result.resumes.map((resume) => (
             <Paper 
               key={`${resume.id || resume.language}-${resume.target}`} 
-              sx={{ p: { xs: 1.5, sm: 2 } }}
+              sx={{ 
+                p: { xs: 2, sm: 3 },
+                border: "1px solid rgba(102, 126, 234, 0.1)",
+                transition: "all 0.3s ease-in-out",
+                "&:hover": {
+                  boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+                  transform: "translateY(-2px)"
+                }
+              }}
+              elevation={1}
             >
               <Stack 
                 direction={{ xs: "column", sm: "row" }} 

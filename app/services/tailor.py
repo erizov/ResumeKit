@@ -8,10 +8,18 @@ configured, it will delegate to the OpenAI-backed implementation.
 """
 
 import os
+import sys
 from typing import List
 
+from ..config import OPENAI_API_KEY
 from ..schemas import LanguageCode, RecommendOptions, TailoredResume, TargetRole
 from .llm_client import generate_tailored_resume_llm
+
+# Ensure print statements flush immediately
+def _flush_print(*args, **kwargs):
+    """Print and immediately flush stdout."""
+    print(*args, **kwargs)
+    sys.stdout.flush()
 
 
 def generate_tailored_resumes(
@@ -24,19 +32,39 @@ def generate_tailored_resumes(
     """
     Generate tailored resume drafts for the given languages and targets.
 
-    The implementation uses a deterministic stub unless OpenAI
-    integration is explicitly enabled via environment variables.
+    The implementation uses OpenAI if available, otherwise falls back to
+    a deterministic stub. OpenAI is used if:
+    - RESUMEKIT_USE_OPENAI is explicitly set to a truthy value, OR
+    - OPENAI_API_KEY is configured (auto-enable)
     """
-    use_llm = os.getenv("RESUMEKIT_USE_OPENAI", "").lower() in {
-        "1",
-        "true",
-        "yes",
-    }
+    # Auto-enable OpenAI if API key is configured, unless explicitly disabled
+    explicit_flag = os.getenv("RESUMEKIT_USE_OPENAI", "").lower()
+    has_api_key = bool(OPENAI_API_KEY)
+    
+    use_llm = (
+        explicit_flag in {"1", "true", "yes"} or
+        (has_api_key and explicit_flag not in {"0", "false", "no"})
+    )
+    
+    _flush_print(f"[Tailor] DEBUG: explicit_flag='{explicit_flag}', has_api_key={has_api_key}, use_llm={use_llm}")
+    _flush_print(f"[Tailor] DEBUG: OPENAI_API_KEY present: {bool(OPENAI_API_KEY)}")
+    if OPENAI_API_KEY:
+        _flush_print(f"[Tailor] DEBUG: OPENAI_API_KEY length: {len(OPENAI_API_KEY)}, first 10 chars: {OPENAI_API_KEY[:10]}...")
+    else:
+        _flush_print(f"[Tailor] WARNING: OPENAI_API_KEY is not set! LLM will not be used.")
+        _flush_print(f"[Tailor] WARNING: Set OPENAI_API_KEY environment variable to enable OpenAI calls.")
+
+    if not use_llm:
+        _flush_print(f"[Tailor] WARNING: LLM is disabled. Using stub content instead of OpenAI.")
+        _flush_print(f"[Tailor] WARNING: To enable OpenAI, set OPENAI_API_KEY or RESUMEKIT_USE_OPENAI=1")
 
     resumes: list[TailoredResume] = []
     for language in options.languages:
         for target in options.targets:
+            _flush_print(f"[Tailor] DEBUG: Processing language={language.value}, target={target.value}")
+            
             if use_llm:
+                _flush_print(f"[Tailor] DEBUG: Calling generate_tailored_resume_llm() for language={language.value}...")
                 content = generate_tailored_resume_llm(
                     base_resume_text=base_resume_text,
                     job_description=job_description,
@@ -45,8 +73,10 @@ def generate_tailored_resumes(
                     aggressiveness=options.aggressiveness,
                     preset_guidance=preset_guidance,
                 )
-                notes = "Generated using OpenAI."
+                _flush_print(f"[Tailor] DEBUG: Received content from LLM for {language.value}, length={len(content)}")
+                notes = f"Generated using OpenAI for {language.value}."
             else:
+                _flush_print(f"[Tailor] DEBUG: Using stub content (LLM disabled)")
                 content = _build_stub_content(
                     language=language,
                     target=target,

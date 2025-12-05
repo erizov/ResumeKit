@@ -10,7 +10,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import BaseResume, JobPosting, TailoredResume
+from ..models import BaseResume, JobPosting, TailoredResume, User
+from ..routes.auth import get_current_user
 from ..schemas import (
     HistoryResponse,
     KeywordCoverage,
@@ -35,11 +36,18 @@ def get_history(
     offset: int = Query(0, ge=0),
     language: LanguageCode | None = Query(None),
     target: TargetRole | None = Query(None),
+    current_user: User = Depends(get_current_user),
 ) -> HistoryResponse:
     """
-    Return a paginated list of tailored resumes.
+    Return a paginated list of tailored resumes for the current user.
     """
-    query = select(TailoredResume).order_by(TailoredResume.created_at.desc())
+    # Filter by current user's resumes
+    query = (
+        select(TailoredResume)
+        .join(BaseResume)
+        .where(BaseResume.user_id == current_user.id)
+        .order_by(TailoredResume.created_at.desc())
+    )
 
     if language is not None:
         query = query.where(TailoredResume.language == language.value)

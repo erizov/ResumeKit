@@ -19,9 +19,10 @@ python -m uvicorn app.main:app --reload 2>&1 | ForEach-Object { Write-Host "[Bac
 "@
     
     $backendScript | Out-File -FilePath ".backend-start.ps1" -Encoding UTF8
-    Start-Process powershell -ArgumentList "-NoExit", "-File", ".backend-start.ps1" -WindowStyle Normal
-    Start-Sleep -Seconds 1
-    Write-Host "[Backend] ✅ Started in new window" -ForegroundColor Green
+    $backendProcess = Start-Process powershell -ArgumentList "-NoExit", "-File", ".backend-start.ps1" -WindowStyle Normal -PassThru
+    $backendProcess.Id | Out-File -FilePath ".backend.pid" -Encoding ASCII
+    Start-Sleep -Milliseconds 500  # Give window time to appear
+    Write-Host "[Backend] ✅ Started in new window (PID: $($backendProcess.Id))" -ForegroundColor Green
 }
 
 # Wait a moment
@@ -43,9 +44,10 @@ npm run dev 2>&1 | ForEach-Object { Write-Host "[Frontend] `$_" }
 "@
     
     $frontendScript | Out-File -FilePath ".frontend-start.ps1" -Encoding UTF8
-    Start-Process powershell -ArgumentList "-NoExit", "-File", ".frontend-start.ps1" -WindowStyle Normal
-    Start-Sleep -Seconds 1
-    Write-Host "[Frontend] ✅ Started in new window" -ForegroundColor Green
+    $frontendProcess = Start-Process powershell -ArgumentList "-NoExit", "-File", ".frontend-start.ps1" -WindowStyle Normal -PassThru
+    $frontendProcess.Id | Out-File -FilePath ".frontend.pid" -Encoding ASCII
+    Start-Sleep -Milliseconds 500  # Give window time to appear
+    Write-Host "[Frontend] ✅ Started in new window (PID: $($frontendProcess.Id))" -ForegroundColor Green
 }
 
 Write-Host "`n🎉 ResumeKit is running in separate windows!" -ForegroundColor Green

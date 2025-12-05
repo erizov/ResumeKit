@@ -74,18 +74,46 @@ const HistoryPage: React.FC = () => {
 
   return (
     <>
-      <Typography 
-        variant="h4" 
-        gutterBottom
-        sx={{ fontSize: { xs: "1.75rem", sm: "2.125rem" } }}
-      >
-        Resume History
-      </Typography>
+      <Box sx={{ mb: 4 }}>
+        <Typography 
+          variant="h4" 
+          gutterBottom
+          sx={{ 
+            fontSize: { xs: "1.75rem", sm: "2.125rem", md: "2.5rem" },
+            fontWeight: 700,
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            backgroundClip: "text",
+            mb: 1
+          }}
+        >
+          Resume History
+        </Typography>
+        <Typography 
+          variant="body1" 
+          color="text.secondary"
+          sx={{ fontSize: { xs: "0.95rem", sm: "1.1rem" } }}
+        >
+          View and manage all your previously generated tailored resumes
+        </Typography>
+      </Box>
 
       {history && history.items.length === 0 ? (
-        <Paper sx={{ p: { xs: 2, sm: 3 } }}>
-          <Typography variant="body1" color="text.secondary">
-            No tailored resumes yet. Generate some from the Home page!
+        <Paper 
+          sx={{ 
+            p: { xs: 3, sm: 4 },
+            textAlign: "center",
+            background: "linear-gradient(to bottom, #ffffff 0%, #f8f9ff 100%)",
+            border: "1px solid rgba(102, 126, 234, 0.1)"
+          }}
+          elevation={1}
+        >
+          <Typography variant="h6" color="text.secondary" gutterBottom>
+            No tailored resumes yet
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Generate some from the Home page!
           </Typography>
         </Paper>
       ) : (
@@ -94,18 +122,21 @@ const HistoryPage: React.FC = () => {
           sx={{ 
             maxWidth: "100%",
             overflowX: "auto",
+            border: "1px solid rgba(102, 126, 234, 0.1)",
+            borderRadius: 2
           }}
+          elevation={1}
         >
           <Table size="small">
             <TableHead>
-              <TableRow>
-                <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+              <TableRow sx={{ bgcolor: "grey.50" }}>
+                <TableCell sx={{ display: { xs: "none", sm: "table-cell" }, fontWeight: 600 }}>
                   ID
                 </TableCell>
-                <TableCell>Created</TableCell>
-                <TableCell>Language</TableCell>
-                <TableCell>Target Role</TableCell>
-                <TableCell align="right">Actions</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Created</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Language</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Target Role</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 600 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -134,10 +165,16 @@ const HistoryPage: React.FC = () => {
                   </TableCell>
                   <TableCell align="right">
                     <Button
-                      variant="outlined"
+                      variant="contained"
                       size="small"
                       onClick={() => navigate(`/tailor/${item.id}`)}
-                      sx={{ fontSize: { xs: "0.7rem", sm: "0.875rem" } }}
+                      sx={{ 
+                        fontSize: { xs: "0.7rem", sm: "0.875rem" },
+                        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                        "&:hover": {
+                          background: "linear-gradient(135deg, #764ba2 0%, #667eea 100%)",
+                        }
+                      }}
                     >
                       View
                     </Button>

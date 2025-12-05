@@ -39,6 +39,15 @@ export async function fetchWithRetry(
     );
   }
 
+  // Add auth token if available
+  const token = localStorage.getItem("token");
+  if (token) {
+    options.headers = {
+      ...options.headers,
+      Authorization: `Bearer ${token}`,
+    };
+  }
+
   for (let attempt = 0; attempt <= config.maxRetries!; attempt++) {
     try {
       const response = await fetch(url, options);
