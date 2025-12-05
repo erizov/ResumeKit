@@ -13,9 +13,10 @@ import {
   Chip
 } from "@mui/material";
 import { ContentCopy, Close } from "@mui/icons-material";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import FileUploadZone from "../components/FileUploadZone";
+import { fetchWithRetry, getErrorMessage, isOnline } from "../utils/apiClient";
 
 type TailoredResume = {
   id: number;
@@ -43,6 +44,20 @@ const HomePage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<RecommendResult | null>(null);
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
+  const [offline, setOffline] = useState(!isOnline());
+
+  useEffect(() => {
+    const handleOnline = () => setOffline(false);
+    const handleOffline = () => setOffline(true);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -70,20 +85,21 @@ const HomePage: React.FC = () => {
     formData.append("targets", targets);
     formData.append("aggressiveness", String(aggressiveness));
 
+    if (offline) {
+      setError("You are currently offline. Please check your internet connection.");
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await fetch("/api/recommend", {
+      const response = await fetchWithRetry("/api/recommend", {
         method: "POST",
-        body: formData
+        body: formData,
       });
 
       if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        const detail =
-          payload && payload.detail
-            ? String(payload.detail)
-            : `HTTP error ${response.status}`;
-        throw new Error(detail);
+        const errorMessage = await getErrorMessage(response);
+        throw new Error(errorMessage);
       }
 
       const data: RecommendResult = await response.json();
@@ -111,7 +127,7 @@ const HomePage: React.FC = () => {
     setFetchingJob(true);
     setError(null);
     try {
-      const response = await fetch("/api/job/fetch", {
+      const response = await fetchWithRetry("/api/job/fetch", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -120,12 +136,8 @@ const HomePage: React.FC = () => {
       });
 
       if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        const detail =
-          payload && payload.detail
-            ? String(payload.detail)
-            : `HTTP error ${response.status}`;
-        throw new Error(detail);
+        const errorMessage = await getErrorMessage(response);
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -279,6 +291,13 @@ const HomePage: React.FC = () => {
             </Stack>
 
             {loading && <LinearProgress />}
+            {offline && (
+              <Paper sx={{ p: 2, bgcolor: "warning.light", mb: 2 }}>
+                <Typography color="warning.dark" variant="body2">
+                  You are currently offline. Please check your internet connection.
+                </Typography>
+              </Paper>
+            )}
             {error && (
               <Typography color="error" variant="body2">
                 {error}

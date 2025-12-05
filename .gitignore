@@ -212,3 +212,11 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Process ID files for start/stop scripts
+.backend.pid
+.frontend.pid
+.backend-start.ps1
+.frontend-start.ps1
+.backend-start.bat
+.frontend-start.bat

@@ -14,6 +14,7 @@ from openai import OpenAI
 
 from ..config import OPENAI_API_BASE, OPENAI_API_KEY
 from ..schemas import LanguageCode, StructuredResume, TargetRole
+from .humanizer import humanize_text
 
 
 _CLIENT: Optional[OpenAI] = None
@@ -92,7 +93,11 @@ def generate_tailored_resume_llm(
         "You are an assistant that rewrites CVs truthfully and concisely. "
         "You must never invent jobs, employers, dates, or achievements. "
         "You may only rephrase and re-order the existing material. "
-        "Use a structure suitable for modern ATS systems."
+        "Use a structure suitable for modern ATS systems. "
+        "IMPORTANT: Write in a natural, human style. Avoid AI stigmas like: "
+        "excessive use of 'leverage', 'utilize', 'robust', 'cutting-edge', "
+        "'seamlessly', 'synergy'. Use simple, direct language. Vary sentence "
+        "structure naturally. Don't be overly enthusiastic or perfect."
         f"{rag_context}"
         f"{preset_context}"
     )
@@ -140,6 +145,13 @@ def generate_tailored_resume_llm(
     cleaned_content = clean_resume_text(cleaned_content)
     cleaned_content = format_dates_on_right(cleaned_content)
     
+    # Humanize to reduce AI stigmas
+    cleaned_content = humanize_text(
+        cleaned_content,
+        language=language.value,
+        apply_variations=True
+    )
+    
     return cleaned_content
 
 
@@ -149,6 +161,7 @@ def generate_cover_letter_llm(
     job_description: str,
     language: LanguageCode,
     custom_instructions: str | None = None,
+    version: int = 1,
 ) -> str:
     """
     Generate a cover letter based on a tailored resume and job description.
@@ -158,6 +171,7 @@ def generate_cover_letter_llm(
         job_description: The job description text.
         language: Target language for the cover letter.
         custom_instructions: Optional custom instructions for the cover letter.
+        version: Version number (1 or 2) to generate different styles.
 
     Returns:
         Generated cover letter text.
@@ -166,17 +180,41 @@ def generate_cover_letter_llm(
 
     style_hint = _language_style_hint(language)
 
+    # Different styles for different versions
+    if version == 1:
+        style_guidance = (
+            "Write a traditional, formal cover letter. "
+            "Use a professional tone with clear structure: "
+            "introduction, body paragraphs highlighting experience, "
+            "and a closing statement. Focus on qualifications and "
+            "achievements."
+        )
+    else:  # version == 2
+        style_guidance = (
+            "Write a modern, results-oriented cover letter. "
+            "Use a more conversational but still professional tone. "
+            "Lead with impact and specific achievements. "
+            "Show enthusiasm and cultural fit. "
+            "Be more concise and action-oriented."
+        )
+
     system_prompt = (
         "You are an assistant that writes professional cover letters. "
         "Write a compelling cover letter that highlights the candidate's "
         "relevant experience and skills from the resume. "
         "Keep it concise, professional, and tailored to the specific job. "
-        "Do not invent information not present in the resume."
+        "Do not invent information not present in the resume. "
+        "CRITICAL: Write in a natural, human style. Avoid AI stigmas: "
+        "don't overuse 'leverage', 'utilize', 'robust', 'cutting-edge', "
+        "'seamlessly', 'synergy', 'paradigm'. Use conversational language. "
+        "Vary sentence structure. Be genuine, not overly enthusiastic. "
+        "Write like a real person, not a perfect AI."
     )
 
     user_prompt = (
         f"LANGUAGE: {language.value}\n"
-        f"STYLE HINTS: {style_hint}\n\n"
+        f"STYLE HINTS: {style_hint}\n"
+        f"VERSION {version} STYLE: {style_guidance}\n\n"
     )
 
     if custom_instructions:
@@ -188,7 +226,8 @@ def generate_cover_letter_llm(
         "TAILORED RESUME:\n"
         f"{tailored_resume_text}\n\n"
         "TASK:\n"
-        "Write a professional cover letter for this position. "
+        "Write a professional cover letter for this position following "
+        f"the Version {version} style guidance above. "
         "Highlight relevant experience and skills from the resume. "
         "Keep it concise (3-4 paragraphs). "
         "Return ONLY the cover letter text, no explanations."
@@ -200,11 +239,20 @@ def generate_cover_letter_llm(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        temperature=0.6,
+        temperature=0.7,  # Slightly higher for more natural variation
     )
 
     content = completion.choices[0].message.content or ""
-    return content.strip()
+    cleaned = content.strip()
+    
+    # Humanize to reduce AI stigmas
+    cleaned = humanize_text(
+        cleaned,
+        language=language.value,
+        apply_variations=True
+    )
+    
+    return cleaned
 
 
 def parse_resume_to_structured(resume_text: str) -> StructuredResume:

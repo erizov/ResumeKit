@@ -46,6 +46,11 @@ const DetailPage: React.FC = () => {
   const [copySuccess, setCopySuccess] = useState(false);
   const [coverage, setCoverage] = useState<KeywordCoverage | null>(null);
   const [loadingCoverage, setLoadingCoverage] = useState(false);
+  const [coverLetters, setCoverLetters] = useState<
+    Array<{ id: number; text: string; version: number; created_at: string }>
+  >([]);
+  const [loadingCoverLetters, setLoadingCoverLetters] = useState(false);
+  const [generatingCoverLetters, setGeneratingCoverLetters] = useState(false);
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -98,8 +103,52 @@ const DetailPage: React.FC = () => {
 
     if (detail) {
       fetchCoverage();
+      fetchCoverLetters();
     }
   }, [id, detail]);
+
+  const fetchCoverLetters = async () => {
+    if (!id) return;
+
+    setLoadingCoverLetters(true);
+    try {
+      const response = await fetch(`/api/tailor/${id}/cover-letter`);
+      if (response.ok) {
+        const data = await response.json();
+        setCoverLetters(data.cover_letters || []);
+      }
+    } catch (err) {
+      // Cover letters are optional, don't show error
+      console.error("Failed to load cover letters:", err);
+    } finally {
+      setLoadingCoverLetters(false);
+    }
+  };
+
+  const handleGenerateCoverLetters = async () => {
+    if (!id) return;
+
+    setGeneratingCoverLetters(true);
+    try {
+      const response = await fetch(`/api/tailor/${id}/cover-letter`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCoverLetters(data.cover_letters || []);
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 3000);
+      } else {
+        throw new Error("Failed to generate cover letters");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate cover letters");
+    } finally {
+      setGeneratingCoverLetters(false);
+    }
+  };
 
   const handleDownloadPDF = () => {
     if (!id) return;
@@ -330,6 +379,92 @@ const DetailPage: React.FC = () => {
         >
           {detail.job_description}
         </Box>
+      </Paper>
+
+      <Paper sx={{ p: 3, mt: 2 }}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          spacing={2}
+          mb={2}
+        >
+          <Typography variant="h6">Cover Letters</Typography>
+          {coverLetters.length === 0 && (
+            <Button
+              variant="contained"
+              onClick={handleGenerateCoverLetters}
+              disabled={generatingCoverLetters}
+            >
+              {generatingCoverLetters ? "Generating..." : "Generate Cover Letters"}
+            </Button>
+          )}
+        </Stack>
+
+        {loadingCoverLetters && <LinearProgress />}
+
+        {coverLetters.length > 0 && (
+          <Stack spacing={3}>
+            {coverLetters.map((cl) => (
+              <Box key={cl.id}>
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  mb={1}
+                >
+                  <Typography variant="subtitle1">
+                    Version {cl.version}:{" "}
+                    {cl.version === 1
+                      ? "Traditional Style"
+                      : "Modern Style"}
+                  </Typography>
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      size="small"
+                      startIcon={<ContentCopy />}
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(cl.text);
+                          setCopySuccess(true);
+                          setTimeout(() => setCopySuccess(false), 3000);
+                        } catch (err) {
+                          console.error("Failed to copy:", err);
+                        }
+                      }}
+                    >
+                      Copy
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        window.open(`/api/cover-letter/${cl.id}/pdf`, "_blank");
+                      }}
+                    >
+                      Download PDF
+                    </Button>
+                  </Stack>
+                </Stack>
+                <Box
+                  component="pre"
+                  sx={{
+                    whiteSpace: "pre-wrap",
+                    fontFamily: "monospace",
+                    fontSize: 12,
+                    p: 2,
+                    bgcolor: "grey.50",
+                    borderRadius: 1,
+                    maxHeight: "400px",
+                    overflow: "auto",
+                  }}
+                >
+                  {cl.text}
+                </Box>
+              </Box>
+            ))}
+          </Stack>
+        )}
       </Paper>
 
       <Snackbar

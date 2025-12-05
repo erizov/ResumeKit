@@ -145,6 +145,9 @@ class TailoredCoverLetter(Base):
         DateTime, default=lambda: datetime.now(UTC)
     )
     text: Mapped[str] = mapped_column(String, nullable=False)
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, index=True
+    )
 
     tailored_resume_id: Mapped[int] = mapped_column(
         Integer,

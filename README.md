@@ -3,6 +3,43 @@
 Minimal backend + frontend to tailor a resume to a specific job
 description using FastAPI, OpenAI, and a React/MUI frontend.
 
+### Quick Start
+
+**Start both services:**
+```bash
+# PowerShell (Windows) - Opens separate windows with prefixed logs
+.\start.ps1
+
+# Alternative: Separate log windows (recommended)
+.\start-logs.ps1
+
+# Batch (Windows) - Opens separate windows
+start.bat
+```
+
+**Stop both services:**
+```bash
+.\stop.ps1    # PowerShell
+stop.bat      # Batch
+```
+
+**Restart both services:**
+```bash
+.\restart.ps1  # PowerShell
+restart.bat    # Batch
+```
+
+**Log Format:**
+- All logs are prefixed with `[Backend]` or `[Frontend]`
+- Timestamps included: `[Backend] [HH:mm:ss] log message`
+- Separate PowerShell/CMD windows for each service
+- Error logs are also prefixed and visible in terminal
+
+After starting, access:
+- **Frontend**: http://localhost:5173 (with resume file chooser)
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+
 ### Project structure
 
 - **Backend** – FastAPI app in `app/`
@@ -28,13 +65,34 @@ python -m venv .venv
 .\.venv\Scripts\activate  # on Windows PowerShell
 pip install -r requirements.txt
 
-pytest -q
+pytest tests/test_humanizer.py tests/test_humanizer_russian.py -v --tb=short
 ```
 
 #### 2. Backend – run development server
 
+**Option A: Use convenience scripts (recommended)**
+
 ```bash
+# PowerShell (Windows)
+.\start.ps1      # Start both backend and frontend
+.\stop.ps1       # Stop both services
+.\restart.ps1    # Restart both services
+
+# Batch (Windows)
+start.bat        # Start both backend and frontend
+stop.bat         # Stop both services
+restart.bat      # Restart both services
+```
+
+**Option B: Manual start**
+
+```bash
+# Backend only
 uvicorn app.main:app --reload
+
+# Frontend only (in separate terminal)
+cd frontend
+npm run dev
 ```
 
 The API will be available at `http://localhost:8000`, with:
@@ -47,6 +105,7 @@ The API will be available at `http://localhost:8000`, with:
 - `GET /api/tailor/{id}/docx` – download tailored resume as DOCX.
 - `POST /api/tailor/{id}/cover-letter` – generate cover letter (rate limited: 5/hour).
 - `GET /api/tailor/{id}/cover-letter` – retrieve existing cover letter.
+- `GET /api/cover-letter/{id}/pdf` – download cover letter as PDF.
 - `GET /api/metrics` – basic application statistics.
 - `POST /api/job/fetch` – fetch and parse job description from URL.
 - `GET /health` – health check endpoint.
@@ -54,6 +113,8 @@ The API will be available at `http://localhost:8000`, with:
 - `POST /api/auth/login` – user authentication (returns JWT token).
 - `GET /api/auth/me` – get current user info (requires authentication).
 - `POST /api/resume/parse` – parse resume into structured format (name, experience, skills, etc.).
+- `POST /api/humanizer/humanize` – humanize text to reduce AI stigmas.
+- `POST /api/humanizer/ai-score` – check AI detection score for text.
 
 #### 3. Frontend – install and run dev server
 
@@ -108,187 +169,106 @@ pytest tests/test_recommend_endpoint.py::test_recommend_basic
 **Test categories:**
 
 1. **Unit tests** – Test individual components:
-   - `test_recommend_endpoint.py` – Main recommendation endpoint
-   - `test_recommend_file_upload.py` – File upload handling
-   - `test_job_fetch.py` – Job URL fetching
-   - `test_resume_parse.py` – Resume parsing endpoint
-   - `test_keyword_coverage.py` – Keyword coverage analysis
-   - `test_pdf_export.py` – PDF generation
+   
+   ```bash
+   pytest tests/test_recommend_endpoint.py
+   pytest tests/test_resume_parse.py
+   pytest tests/test_pdf_export.py
+   pytest tests/test_humanizer.py
+   pytest tests/test_humanizer_russian.py
+   ```
 
-2. **Integration tests** – Test full workflows:
-   - `test_integration_api.py` – End-to-end API flows
-   - `test_integration_db.py` – Database operations and relationships
-   - `test_history_and_detail.py` – History and detail endpoints
+2. **Integration tests** – Test full API flows:
+   
+   ```bash
+   pytest tests/test_integration_api.py
+   pytest tests/test_integration_db.py
+   pytest tests/test_integration_openai.py  # Requires OPENAI_API_KEY
+   ```
 
-3. **OpenAI integration tests** (optional):
-   - `test_integration_openai.py` – Real OpenAI API calls
-   - These tests are skipped if `OPENAI_API_KEY` is not set
-   - To run: Set `OPENAI_API_KEY` and `RESUMEKIT_USE_OPENAI=1`
+3. **E2E tests** – Test real resume tailoring with output:
+   
+   ```bash
+   # Requires OPENAI_API_KEY and ResumeEugeneRizov.docx file
+   pytest tests/e2e/test_real_resume_tailoring.py::test_russian_job_posting_tailoring -v -s
+   ```
 
-**Test database:**
+4. **API contract tests** – Verify request/response schemas:
+   
+   ```bash
+   pytest tests/test_api_contract.py
+   ```
 
-Tests use an in-memory SQLite database by default (configured via `DATABASE_URL`).
-Each test gets a clean database state, so tests can run in any order.
+**Test configuration:**
 
-**Running tests with coverage:**
-
-```bash
-# Install coverage tool (if not already installed)
-pip install pytest-cov
-
-# Run tests with coverage report
-pytest --cov=app --cov-report=html
-
-# View HTML report
-# Open htmlcov/index.html in your browser
-```
-
-**Test output:**
-
-- `-q` (quiet): Shows only dots for passed tests and summary
-- `-v` (verbose): Shows each test name and result
-- `-s`: Shows print statements and output
-- `-x`: Stop on first failure
-
-**Example test run:**
-```bash
-$ pytest -q
-....................ssss.....................s..
-43 passed, 5 skipped, 1 warning in 15.90s
-
-# Or with verbose output:
-$ pytest -v
-============================= test session starts =============================
-platform win32 -- Python 3.13.7, pytest-7.4.3
-collected 48 items
-
-tests/test_recommend_endpoint.py::test_recommend_basic PASSED
-tests/test_recommend_endpoint.py::test_recommend_with_file PASSED
-...
-tests/test_integration_api.py::test_full_flow PASSED
-tests/test_integration_db.py::test_cascade_delete PASSED
-tests/test_integration_openai.py::test_openai_tailoring SKIPPED
-...
-
-============================= 43 passed, 5 skipped in 15.90s ===================
-```
-
-**Skipped tests:**
-
-Some tests are skipped under certain conditions:
-- OpenAI integration tests: Skipped if `OPENAI_API_KEY` is not set
-- These are marked with `@pytest.mark.skipif` decorators
-
-**Troubleshooting:**
-
-- **Import errors**: Make sure you're in the project root and virtual environment is activated
-- **Database errors**: Tests create tables automatically; ensure SQLite is available
-- **OpenAI tests failing**: Check that `OPENAI_API_KEY` is set correctly and API is accessible
-
-#### E2E Tests for Real Resume Tailoring
-
-End-to-end tests that use real resume files and job postings:
-- `tests/e2e/test_real_resume_tailoring.py` – Tests with actual resume file
-  - Uploads `ResumeEugeneRizov.docx`
-  - Generates tailored resumes in Russian and English
-  - Saves output as DOCX files to `output/` directory
-
-**To run E2E tests with real OpenAI:**
-```bash
-# Windows PowerShell
-$env:RESUMEKIT_USE_OPENAI="1"
-pytest tests/e2e/test_real_resume_tailoring.py -v
-
-# Linux/Mac
-RESUMEKIT_USE_OPENAI=1 pytest tests/e2e/test_real_resume_tailoring.py -v
-```
-
-**Note:** These tests require `OPENAI_API_KEY` to be set and will use real OpenAI API calls.
+- Tests use SQLite in-memory database by default
+- Rate limiting is disabled in tests (see `tests/conftest.py`)
+- OpenAI tests are skipped if `OPENAI_API_KEY` is not set
 
 #### Frontend Tests
 
-Frontend tests are not yet implemented. Planned:
-- Unit tests for React components (Jest + React Testing Library)
-- Integration tests for API client
-- E2E tests with Playwright (see `development_roadmap.md`)
+Frontend E2E tests use Playwright:
 
-### Database Migrations
-
-The project uses Alembic for database schema versioning.
-
-**Initial setup:**
 ```bash
-# Alembic is already initialized
-# Run migrations to create/update database schema
-alembic upgrade head
+# Install Playwright browsers (first time only)
+cd frontend
+npx playwright install chromium
+
+# Run E2E tests (requires both servers running)
+npx playwright test
 ```
 
-**Creating new migrations:**
-```bash
-# After modifying models in app/models.py
-alembic revision --autogenerate -m "Description of changes"
-alembic upgrade head
-```
+### Features
 
-**Rollback:**
-```bash
-# Rollback last migration
-alembic downgrade -1
+- ✅ Resume file upload (DOCX, DOC, PDF) with drag-and-drop
+- ✅ Job description input (text or URL fetch)
+- ✅ Multi-language support (English, Russian)
+- ✅ Multiple target roles (backend, fullstack, GPT engineer)
+- ✅ Tailored resume generation with AI humanization
+- ✅ Two versions of cover letters (Traditional & Modern)
+- ✅ PDF export for resumes and cover letters
+- ✅ Keyword coverage analysis
+- ✅ Resume history and detail views
+- ✅ Diff view (original vs tailored)
+- ✅ Error handling with retry and offline detection
+- ✅ User authentication (JWT)
+- ✅ Rate limiting
+- ✅ RAG-based best practices integration
 
-# View migration history
-alembic history
-```
+### Development Scripts
+
+**PowerShell scripts:**
+- `start.ps1` – Start both backend and frontend
+- `stop.ps1` – Stop both services
+- `restart.ps1` – Restart both services
+
+**Batch scripts:**
+- `start.bat` – Start both backend and frontend
+- `stop.bat` – Stop both services
+- `restart.bat` – Restart both services
+
+### Dependencies
+
+**Backend:**
+- FastAPI
+- SQLAlchemy
+- OpenAI (optional, for AI features)
+- reportlab (for PDF generation)
+- python-docx (for DOCX generation)
+- beautifulsoup4 (for job URL fetching)
+
+**Frontend:**
+- React
+- Material-UI
+- React Router
+- Vite
+
+See `requirements.txt` and `frontend/package.json` for complete lists.
 
 ### Deployment
 
-See [`DEPLOYMENT.md`](DEPLOYMENT.md) for detailed deployment instructions.
+See `DEPLOYMENT.md` for Docker and production deployment instructions.
 
-**Quick start with Docker Compose:**
-```bash
-# Start all services (PostgreSQL, backend, frontend)
-docker-compose up -d
+### License
 
-# Run migrations
-docker-compose exec backend alembic upgrade head
-
-# View logs
-docker-compose logs -f
-```
-
-**Production deployment:**
-- Backend: Docker container or direct Python deployment
-- Frontend: Static build deployed to CDN or nginx
-- Database: PostgreSQL with automated backups
-- See `DEPLOYMENT.md` for complete guide
-
-### Development Roadmap
-
-See [`development_roadmap.md`](development_roadmap.md) for planned
-frontend improvements, additional backend features, and integration tests.
-
-**Current Status:**
-- ✅ Backend MVP with `/api/recommend`, `/api/history`, `/api/tailor/{id}`
-- ✅ PDF export: `GET /api/tailor/{id}/pdf` generates downloadable PDFs
-- ✅ DOCX export: `GET /api/tailor/{id}/docx` generates downloadable DOCX files
-- ✅ Cover letter generation: `POST /api/tailor/{id}/cover-letter` with OpenAI
-- ✅ Rate limiting: Applied to expensive endpoints (configurable via `RATE_LIMIT_ENABLED`)
-- ✅ Metrics: `GET /api/metrics` provides basic statistics
-- ✅ Health checks: `GET /health` for monitoring
-- ✅ Authentication: JWT-based auth with signup/login endpoints
-- ✅ Database migrations: Alembic configured for schema versioning
-- ✅ Deployment: Docker and docker-compose configuration ready
-- ✅ Integration tests: API flow tests, database tests, contract tests, optional OpenAI tests
-- ✅ E2E tests: Playwright test suite configured
-- ✅ RAG (Retrieval-Augmented Generation): Market-specific best practices integration for enhanced tailoring
-- ✅ Backend features: Job URL fetching, structured parsing, keyword coverage, PDF export, cover letters, rate limiting, metrics, RAG
-- ✅ Frontend improvements: History page, detail view, routing with React Router
-- ✅ Frontend UX: Copy to clipboard, job URL fetching in form, keyword coverage visualization
-- ✅ Frontend polish: Drag-and-drop file upload, diff view (side-by-side/unified), responsive design
-
-The roadmap is organized by priority and includes:
-- Frontend: History page, detail view, routing, keyword coverage, export ✅
-- Backend: Job URL fetching, structured parsing, PDF export, cover letters ✅
-- Integration tests: ✅ API flow tests (done), ✅ Contract tests (done), ✅ E2E tests with Playwright (configured)
-- Production readiness: ✅ Authentication, ✅ Migrations, ✅ Deployment configuration
-
-
+See `LICENSE` file for details.

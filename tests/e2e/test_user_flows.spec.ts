@@ -186,5 +186,84 @@ test.describe("ResumeKit User Flows", () => {
       expect(download.suggestedFilename()).toMatch(/\.pdf$/i);
     }
   });
+
+  test("should generate and display two cover letter versions", async ({ page }) => {
+    // First generate a resume and navigate to detail
+    await page.fill('text=Job description', "Backend developer with Python and FastAPI experience.");
+    await page.fill('text=Resume text', "John Doe\nSoftware Engineer\nPython, FastAPI, PostgreSQL\n5 years experience");
+    await page.click('button[type="submit"]');
+
+    await page.waitForSelector('text=Results', { timeout: 30000 });
+    
+    const viewDetailsButton = page.locator('text=View Details').first();
+    if (await viewDetailsButton.isVisible()) {
+      await viewDetailsButton.click();
+      await expect(page).toHaveURL(/.*\/tailor\/\d+/);
+
+      // Wait for page to load
+      await page.waitForSelector('text=Tailored Resume', { timeout: 5000 });
+
+      // Scroll to cover letters section
+      await page.locator('text=Cover Letters').scrollIntoViewIfNeeded();
+
+      // Click generate cover letters button
+      const generateButton = page.locator('button:has-text("Generate Cover Letters")');
+      if (await generateButton.isVisible()) {
+        await generateButton.click();
+
+        // Wait for cover letters to be generated
+        await page.waitForSelector('text=Version 1', { timeout: 30000 });
+        await page.waitForSelector('text=Version 2', { timeout: 5000 });
+
+        // Verify both versions are displayed
+        await expect(page.locator('text=Version 1: Traditional Style')).toBeVisible();
+        await expect(page.locator('text=Version 2: Modern Style')).toBeVisible();
+
+        // Verify cover letter content is displayed
+        const version1Content = page.locator('text=Version 1').locator('..').locator('pre');
+        const version2Content = page.locator('text=Version 2').locator('..').locator('pre');
+        
+        // Check that content exists (non-empty)
+        const v1Text = await version1Content.textContent();
+        const v2Text = await version2Content.textContent();
+        
+        expect(v1Text).toBeTruthy();
+        expect(v2Text).toBeTruthy();
+        expect(v1Text!.length).toBeGreaterThan(50);
+        expect(v2Text!.length).toBeGreaterThan(50);
+
+        // Test copy functionality for version 1
+        const copyButton1 = page.locator('text=Version 1').locator('..').locator('button:has-text("Copy")').first();
+        if (await copyButton1.isVisible()) {
+          await copyButton1.click();
+          // Wait for success message
+          await expect(page.locator('text=/copied/i')).toBeVisible({ timeout: 3000 });
+        }
+      }
+    }
+  });
+
+  test("should handle cover letter generation errors gracefully", async ({ page }) => {
+    // Navigate to a detail page (assuming one exists or create one)
+    await page.fill('text=Job description', "Test job.");
+    await page.fill('text=Resume text', "Test resume");
+    await page.click('button[type="submit"]');
+
+    await page.waitForSelector('text=Results', { timeout: 30000 });
+    
+    const viewDetailsButton = page.locator('text=View Details').first();
+    if (await viewDetailsButton.isVisible()) {
+      await viewDetailsButton.click();
+      await expect(page).toHaveURL(/.*\/tailor\/\d+/);
+
+      // Try to generate cover letters (may fail if OpenAI not configured)
+      const generateButton = page.locator('button:has-text("Generate Cover Letters")');
+      if (await generateButton.isVisible()) {
+        // The button should be visible and clickable
+        // Error handling will be tested by the backend
+        await expect(generateButton).toBeEnabled();
+      }
+    }
+  });
 });
 

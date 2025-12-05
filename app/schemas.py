@@ -207,6 +207,15 @@ class CoverLetterResponse(BaseModel):
     created_at: datetime
     text: str
     tailored_resume_id: int
+    version: int = 1
+
+
+class CoverLetterListResponse(BaseModel):
+    """
+    Response containing multiple cover letter versions.
+    """
+
+    cover_letters: List[CoverLetterResponse]
 
 
 class UserSignup(BaseModel):

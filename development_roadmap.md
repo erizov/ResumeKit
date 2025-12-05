@@ -86,12 +86,13 @@ This document outlines planned improvements for frontend, backend, and integrati
   - ✅ Uses `diff` npm package for line-by-line comparison
   - ✅ Integrated into `DetailPage` replacing separate original/tailored views
 
-#### 2.3 Export Functionality ✅ PARTIALLY COMPLETE
+#### 2.3 Export Functionality ✅ COMPLETE
 
 - **Features**: ✅
   - ✅ Copy to clipboard: Plain text format (implemented in DetailPage and result cards)
-  - ✅ Download PDF: `GET /api/tailor/{id}/pdf` (backend implemented, frontend integrated)
-  - 📋 Download DOCX: `GET /api/tailor/{id}/docx` (optional, backend not implemented)
+  - ✅ Download PDF for Resumes: `GET /api/tailor/{id}/pdf` (backend implemented with compact two-column layout, frontend integrated)
+  - ✅ Download PDF for Cover Letters: `GET /api/cover-letter/{id}/pdf` (backend implemented, frontend integrated)
+  - 📋 Download DOCX: `GET /api/tailor/{id}/docx` (optional, backend implemented)
 
 - **Components**: ✅
   - ✅ PDF download button in `DetailPage`
@@ -125,11 +126,28 @@ This document outlines planned improvements for frontend, backend, and integrati
 - Screen reader support
 - High contrast mode
 
-#### 3.3 Error Handling
+#### 3.4 AI Detection & Humanization ✅ COMPLETE
 
-- User-friendly error messages
-- Retry mechanisms
-- Offline detection
+- ✅ Humanization service (`app/services/humanizer.py`)
+- ✅ AI stigma phrase replacement (leverage, utilize, robust, etc.)
+- ✅ Natural variations (contractions, style changes)
+- ✅ Sentence structure variation
+- ✅ Enthusiasm reduction
+- ✅ AI score calculation (0-100 scale)
+- ✅ Russian language support
+- ✅ API endpoints:
+  - ✅ `POST /api/humanizer/humanize` - Humanize text
+  - ✅ `POST /api/humanizer/ai-score` - Check AI likelihood
+- ✅ Integration with resume and cover letter generation
+- ✅ Higher temperature for LLM (0.7 for cover letters)
+- ✅ Updated prompts to avoid AI patterns
+- ✅ Tests with 12 test cases
+
+#### 3.3 Error Handling ✅ COMPLETE
+
+- ✅ User-friendly error messages (global exception handlers)
+- ✅ Retry mechanisms (API client with retry logic)
+- ✅ Offline detection (browser API integration)
 
 ---
 
@@ -137,17 +155,19 @@ This document outlines planned improvements for frontend, backend, and integrati
 
 ### Phase 1: Core Enhancements (High Priority)
 
-#### 1.1 Job Description URL Fetching
+#### 1.1 Job Description URL Fetching ✅ COMPLETE
 
-- **Endpoint**: `POST /api/job/fetch`
-- **Input**: `{ "url": "https://..." }`
-- **Implementation**:
-  - Use `httpx` to fetch HTML
-  - Use `beautifulsoup4` or `lxml` to extract main content
-  - Strip boilerplate (headers, footers, navigation)
-  - Return plain text JD
+- **Endpoint**: `POST /api/job/fetch` ✅
+- **Input**: `{ "url": "https://..." }` ✅
+- **Implementation**: ✅
+  - ✅ Uses `httpx` to fetch HTML
+  - ✅ Uses `beautifulsoup4` to extract main content
+  - ✅ Strips boilerplate (headers, footers, navigation)
+  - ✅ Returns plain text JD
+  - ✅ Frontend integration with "Fetch from URL" button
+  - ✅ Error handling and user feedback
 
-- **Dependencies**: Add `beautifulsoup4` or `lxml` to `requirements.txt`
+- **Dependencies**: ✅ `beautifulsoup4==4.12.3` and `lxml==5.3.0` in `requirements.txt`
 
 #### 1.2 Structured Resume Parsing (LLM-based)
 - **Enhancement to `resume_parser.py`**:
@@ -201,16 +221,20 @@ This document outlines planned improvements for frontend, backend, and integrati
 
 #### 2.1 Cover Letter Generation ✅ COMPLETE
 
-- **Endpoint**: `POST /api/tailor/{id}/cover-letter` ✅
-- **Endpoint**: `GET /api/tailor/{id}/cover-letter` ✅ (retrieve existing)
+- **Endpoint**: `POST /api/tailor/{id}/cover-letter` ✅ (generates 2 versions)
+- **Endpoint**: `GET /api/tailor/{id}/cover-letter` ✅ (retrieve all versions)
 - **Input**: Optional custom instructions ✅
 - **Implementation**: ✅
-  - ✅ Uses OpenAI to generate cover letter based on tailored resume + JD
-  - ✅ Stores in `TailoredCoverLetter` model
-  - ✅ Returns cover letter text with metadata
+  - ✅ Uses OpenAI to generate 2 versions of cover letters:
+    - Version 1: Traditional, formal style
+    - Version 2: Modern, results-oriented style
+  - ✅ Stores in `TailoredCoverLetter` model with `version` field
+  - ✅ Returns both cover letter versions with metadata
   - ✅ Requires OpenAI to be enabled (validates configuration)
+  - ✅ Frontend displays both versions with copy functionality
+  - ✅ E2E tests added for cover letter generation
 
-- **Model**: ✅ `TailoredCoverLetter` table with `tailored_resume_id`, `text`, `created_at`
+- **Model**: ✅ `TailoredCoverLetter` table with `tailored_resume_id`, `text`, `version`, `created_at`
 
 #### 2.2 Job Description Parsing (Structured)
 

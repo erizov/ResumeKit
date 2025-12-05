@@ -1,0 +1,38 @@
+# Pre-commit hooks to prevent committing secrets
+# Install: pip install pre-commit
+# Setup: pre-commit install
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-added-large-files
+        args: ['--maxkb=5000']
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: detect-private-key
+        name: Detect private keys
+      
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        name: Detect secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: SECURITY.md
+        
+  - repo: local
+    hooks:
+      - id: check-env-files
+        name: Check for .env files
+        entry: bash -c 'if git diff --cached --name-only | grep -E "\.env$|\.env\..*"; then echo "❌ ERROR: Attempting to commit .env file!"; exit 1; fi'
+        language: system
+        stages: [commit]
+        
+      - id: check-api-keys
+        name: Check for API keys
+        entry: bash -c 'if git diff --cached --unified=0 | grep -iE "(api_key|apikey|secret_key|password|token).*=.*[a-zA-Z0-9]{20,}"; then echo "⚠️  WARNING: Possible API key or secret detected!"; exit 1; fi'
+        language: system
+        stages: [commit]
+
